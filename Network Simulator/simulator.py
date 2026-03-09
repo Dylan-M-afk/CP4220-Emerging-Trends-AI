@@ -1,4 +1,4 @@
-default_schedule = {
+default_schedule_config = {
     "0900": {"A": 0.5, "B": 1.0, "C": 1.0, "D": 1.0, "E": 1.0, "F": 1.0, "G": 0.5, "H": 1.0, "J": 1.0, "K": 1.0, "L": 1.0},
     "0930": {"A": 0.0, "B": 1.0, "C": 1.0, "D": 1.0, "E": 2.0, "F": 0.0, "G": 1.0, "H": 1.0, "J": 1.0, "K": 3.0, "L": 0.0},
     "1000": {"A": 2.0, "B": 0.0, "C": 1.0, "D": 2.0, "E": 1.0, "F": 0.0, "G": 0.5, "H": 0.0, "J": 2.0, "K": 1.5, "L": 0.0},
@@ -17,3 +17,18 @@ default_schedule = {
     "0430": {"A": 1.0, "B": 0.0, "C": 0.0, "D": 2.0, "E": 0.0, "F": 4.0, "G": 0.0, "H": 0.0, "J": 0.0, "K": 2.0, "L": 1.0},
     "0500": {"A": 3.0, "B": 0.0, "C": 0.0, "D": 0.0, "E": 0.0, "F": 5.0, "G": 0.0, "H": 0.0, "J": 0.0, "K": 2.0, "L": 0.0},
 }
+
+class Network:
+    def __init__(self, total_bandwidth):
+        self.total_bandwidth = total_bandwidth
+        self.global_devices = []
+        self.global_nodes = []
+    
+    def simulate_day(schedule):
+        pass
+
+    def generate_devices(device_count):
+        pass
+
+    def assign_devices_to_nodes():
+        pass
