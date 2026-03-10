@@ -1,4 +1,6 @@
+import random
 from enum import Enum
+
 
 default_schedule_config = {
     "0900": {"A": 0.5, "B": 1.0, "C": 1.0, "D": 1.0, "E": 1.0, "F": 1.0, "G": 0.5, "H": 1.0, "J": 1.0, "K": 1.0, "L": 1.0},
@@ -21,9 +23,12 @@ default_schedule_config = {
 }
 
 class Device_Type(Enum):
-    DESKTOP = (50, 250)
-    SERVER = (100, 500)
-    PHONE = (10, 150)
+    # DESKTOP = (50, 250)
+    # SERVER = (100, 500)
+    # PHONE = (10, 150)
+    SERVER = 1
+    DESKTOP = 2
+    PHONE = 3
 
 class Network:
     def __init__(self, total_bandwidth):
@@ -45,21 +50,53 @@ class Node:
         self.max_bandwidth = max_bandwidth
         self.local_devices = []
         
-    def calculate_bandwidth_usage():
+    def calculate_bandwidth_usage(self):
         usage = 0
         
+        for device in self.local_devices:
+            usage += device.get_bandwidth_usage()
+        
         return usage
+
+    def add_device(self, device):
+        self.local_devices.append(device)
     
 class Device:
     def __init__(self, device_type):
         self.device_type = device_type
-        self.bandwidth_usage = self.calculate_bandwidth_usage(self.device_type)
+        self.bandwidth_usage = self.calculate_bandwidth_usage()
     
-    def calculate_bandwidth_usage(device_type):
-        pass
+    def calculate_bandwidth_usage(self):
+        usage = 0
+        
+        if (self.device_type == Device_Type.SERVER):
+            usage = random.randrange(100, 500)
+        elif (self.device_type == Device_Type.DESKTOP):
+            usage = random.randrange(50, 350)
+        else:
+            usage = random.randrange(10, 150)
+        
+        return usage
+    
+    def get_bandwidth_usage(self):
+        return self.bandwidth_usage
 
 def main():
-    pass
+    print("🐸 Hello Final Project 🐸")
+    
+    device_1 = Device(Device_Type.DESKTOP)
+    print(device_1.bandwidth_usage)
+    device_2 = Device(Device_Type.DESKTOP)
+    print(device_2.bandwidth_usage)
+    device_3 = Device(Device_Type.DESKTOP)
+    print(device_3.bandwidth_usage)
+    
+    node = Node(1000)
+    node.add_device(device_1)
+    node.add_device(device_2)
+    node.add_device(device_3)
+    
+    print(node.calculate_bandwidth_usage())
 
 if __name__ == "__main__":
     main()
