@@ -1,0 +1,96 @@
+=========== Project Overview: RL-Based Network Simulation ===========
+Core Design Philosophy:
+    Keep everything file-based and poll-based. No complex message queues, no microservices. 
+    The three modules share data through a shared directory and a lightweight FastAPI server that acts as the single integration point.
+
+┌─────────────────────────────────────────────────────┐
+│                  Shared Data Layer                   │
+│         /shared/state.json  (updated every 5s)       │
+└──────────────┬──────────────────────┬───────────────┘
+               │                      │
+    ┌──────────▼──────┐    ┌──────────▼──────────┐
+    │   Module A      │    │     Module B         │
+    │   Simulator     │    │     RL Agent         │
+    │   (Python)      │    │     (Python)         │
+    └──────────┬──────┘    └──────────┬───────────┘
+               │                      │
+               └──────────┬───────────┘
+                          │
+               ┌──────────▼──────────┐
+               │     Module C        │
+               │  FastAPI + Dash     │
+               │  Dashboard          │
+               └─────────────────────┘
+
+Module A — Network Simulator
+Stack: Python + NetworkX + NumPy
+
+Models the network as a NetworkX graph with nodes and weighted edges (capacity, latency)
+Runs a simulation loop that ticks every 5 seconds, generating synthetic traffic flows
+Each tick: updates link utilization, computes delay/packet loss, applies current routing decision
+Writes the full network state to /shared/state.json on every tick
+Also appends each tick's data to /shared/history.csv for the RL agent to train on
+Exposes a simple config file (topology.yaml) for defining nodes, links, and traffic patterns
+Implements a shortest-path baseline using NetworkX's built-in Dijkstra
+
+Key libraries: networkx, numpy, pyyaml
+
+Module B — RL Agent
+Stack: Python + Stable-Baselines3 (or pure NumPy Q-learning for simplicity)
+
+Reads /shared/history.csv to train offline first, then switches to online updates
+State: vector of link utilizations + current traffic demands (read from state.json)
+Action: choose a routing path for each active flow (discrete action space)
+Reward: negative of average delay + penalty for links over 80% utilization
+Every 5 seconds, reads the latest state.json, picks an action, and writes the recommended routing to /shared/routing_decision.json
+Module A reads routing_decision.json on each tick and applies it (falling back to shortest path if the file is stale or missing)
+
+Key libraries: stable-baselines3 (or just numpy for a simple tabular Q-learner), gymnasium
+
+Module C — Dashboard
+Stack: Python + Dash (Plotly) + FastAPI
+
+A Dash app that auto-refreshes every 5 seconds using Dash's dcc.Interval component
+Reads /shared/state.json and /shared/history.csv directly — no database needed
+Displays: live network graph (nodes/edges colored by utilization), latency over time, RL vs. baseline performance comparison
+A simple FastAPI endpoint (/api/config) accepts POST requests to change simulation parameters (traffic intensity, topology), which Module A picks up on the next tick
+
+Key libraries: dash, plotly, fastapi, uvicorn, pandas
+
+How the Modules Connect
+The integration is entirely file-based with one small API:
+InterfaceFrom → ToFormatFrequency/shared/state.jsonA → B, CJSONEvery 5s/shared/history.csvA → BCSV (append)Every 5s/shared/routing_decision.jsonB → AJSONEvery 5sPOST /api/configC → AJSON (HTTP)On user action
+
+Real-Time Update Flow (Every 5 Seconds)
+1. Module A ticks → computes new network state
+2. Module A writes state.json + appends to history.csv
+3. Module B reads state.json → selects RL action → writes routing_decision.json
+4. Module A reads routing_decision.json on next tick → applies RL routing
+5. Dash dashboard's dcc.Interval fires → reads state.json → re-renders
+This gives end-to-end updates within 5–10 seconds with no special infrastructure.
+
+Project Structure
+/project
+  /shared/
+    state.json
+    history.csv
+    routing_decision.json
+  /module_a/
+    simulator.py
+    topology.yaml
+  /module_b/
+    rl_agent.py
+    train.py
+  /module_c/
+    dashboard.py      # Dash app
+    api.py            # FastAPI config endpoint
+  requirements.txt
+  README.md
+
+Why This Stack?
+
+No Docker, no Kafka, no databases — everything is flat files and one HTTP endpoint
+Dash's dcc.Interval handles the "real-time" feel on the frontend without WebSockets
+File-based communication means each module can be developed and tested fully independently before integration
+NetworkX is the simplest possible graph library for the simulator
+Stable-Baselines3 provides a production-quality RL implementation with minimal boilerplate, but can be swapped for a hand-rolled Q-learner if the project scope calls for it
