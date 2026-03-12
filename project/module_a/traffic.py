@@ -2,7 +2,6 @@
 # This file is responsible for randomly generating a set of network transfers between nodes with random sizes
 
 import numpy as np
-# import networkx as nx
 
 # Generate a list of random transfers for the current tick
 # - graph           : graph of the current network for getting available nodes
@@ -36,7 +35,7 @@ def generate_flows(graph, traffic_config, tick_number):
             "flow_id"     : f"tick{tick_number}_flow{i+1}",
             "source"      : str(source),
             "destination" : str(destination),
-            "size_mbps" : size_mbps
+            "size_mbps"   : size_mbps
         })
 
     return flows

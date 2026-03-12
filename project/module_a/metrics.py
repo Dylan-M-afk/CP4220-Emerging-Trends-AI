@@ -1,8 +1,6 @@
 # ========== Metrics ==========
 # This file is responsible for computing and summarizing the performance metrics of each edge in the network
 
-import networkx as nx
-
 # Utilization threshold at which congestion penalties begin applying
 CONGESTION_THRESHOLD = 0.75
 

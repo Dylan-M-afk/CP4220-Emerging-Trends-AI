@@ -1,17 +1,9 @@
 # ========== Simulator ==========
-#
-# Each tick:
-#   1. Generate random transfers for this tick
-#   2. Route transfers using RL decisions if available, otherwise Dijkstra
-#   3. Compute per-link and network-wide metrics
-#   4. Write state.json and append to history.csv
-#   5. Sleep until the next tick
+# This file is responsible for running the simulator, 
+# it generates a network and data transfers, routes the transfers through the network then computes and logs performance metrics and state for transfers
 
 import os
-import sys
 import time
-import json
-import shutil
 import signal
 
 import graph as graph_module
@@ -31,20 +23,6 @@ def resolve_shared_dir(sim_config):
 
 def rl_decision_path(shared_dir):
     return os.path.join(shared_dir, "routing_decision.json")
-
-
-
-# Write state to json file using temp file to prevent reading of partial values
-def atomic_write_state(shared_dir, state):
-    final_path = os.path.join(shared_dir, "state.json")
-    temp_path  = os.path.join(shared_dir, "state.tmp.json")
-
-    # write to temp path
-    with open(temp_path, "w") as f:
-        json.dump(state, f, indent=2)
-
-    # move temporary file to final location after writing completed
-    shutil.move(temp_path, final_path)
 
 def main():
     # Generate network graph from topology config

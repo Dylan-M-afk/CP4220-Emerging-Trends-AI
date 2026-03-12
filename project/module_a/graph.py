@@ -39,7 +39,7 @@ def build_graph(config):
     return network_graph
 
 # Load network topology and build graph
-def get_graph(config_path):
+def get_graph(config_path=PATH_TOPOLOGY_CONFIG):
 
     config = load_config(config_path)
     graph = build_graph(config)

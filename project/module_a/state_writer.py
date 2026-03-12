@@ -4,6 +4,7 @@
 import os
 import json
 import csv
+import shutil
 from datetime import datetime, timezone
 
 # CSV column order
@@ -41,10 +42,12 @@ def write_state(shared_dir, tick_number, strategy, flows, routes, link_metrics, 
         "summary"     : summary,
     }
 
-    # Write current state to state.json
-    path = os.path.join(shared_dir, "state.json")
-    with open(path, "w") as f:
+    # Write current state to state.json using a temp file to avoid reading partial files
+    final_path = os.path.join(shared_dir, "state.json")
+    temp_path  = os.path.join(shared_dir, "state.tmp.json")
+    with open(temp_path, "w") as f:
         json.dump(state, f, indent=2)
+    shutil.move(temp_path, final_path)
 
 # Track tick history across simulation
 def append_history(shared_dir, tick_number, strategy, flows, summary):

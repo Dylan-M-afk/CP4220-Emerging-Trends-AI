@@ -1,6 +1,6 @@
 # ========== Routing Algorithm ==========
 # This file is responsible for determining the shortest route for transfering data across multiple nodes
-# The algorithm will attempt to utilize the RL model's routing decisions by default, but if they are older than 15 minutes, missing, or invalid
+# The algorithm will attempt to utilize the RL model's routing decisions by default, but if they are older than 15 seconds, missing, or invalid
 # Dijkstra's algorithm will instead be used to calculate the shortest path for the transfers
 
 import os
