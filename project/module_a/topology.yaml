@@ -1,4 +1,6 @@
 # ========== Topology Configuration ==========
+# This file is responsible for defining the topology of the network including nodes and edges
+# as well as network traffic and simulation speed
 
 network:
   name: "CNA Network Topology"

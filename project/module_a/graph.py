@@ -1,3 +1,7 @@
+# ========== Graph Construction ==========
+# This file is responsible for loading the topology configuration from the yaml file and using the config
+# to construct an undirected graph using the nodes and edges in the network topology
+
 import os
 import yaml
 import networkx as nx
@@ -42,7 +46,7 @@ def get_graph(config_path):
     return graph, config
 
 
-# Ensure all nodes and edges loaded and connected
+# Test to ensure all nodes and edges loaded and connected to one another
 if __name__ == "__main__":
     graph, config = get_graph(PATH_TOPOLOGY_CONFIG)
 

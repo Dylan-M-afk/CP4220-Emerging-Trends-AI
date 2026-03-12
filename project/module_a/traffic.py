@@ -1,11 +1,14 @@
+# ========== Traffic Generation ==========
+# This file is responsible for randomly generating a set of network transfers between nodes with random sizes
+
 import numpy as np
-import networkx as nx
+# import networkx as nx
 
 # Generate a list of random transfers for the current tick
 # - graph           : graph of the current network for getting available nodes
 # - traffic_config  : traffic configuration from topology.yaml
 # - tick_number     : current tick count
-# - return          : list of flows for current tick in dict format  
+# - return          : list of transfers in dict format
 def generate_flows(graph, traffic_config, tick_number):
     # Number of transfers per tick
     num_transfers    = traffic_config["num_transfers"]
