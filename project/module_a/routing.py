@@ -1,4 +1,7 @@
-# ========== Routing ==========
+# ========== Routing Algorithm ==========
+# This file is responsible for determining the shortest route for transfering data across multiple nodes
+# The algorithm will attempt to utilize the RL model's routing decisions by default, but if they are older than 15 minutes, missing, or invalid
+# Dijkstra's algorithm will instead be used to calculate the shortest path for the transfers
 
 import os
 import json
@@ -145,14 +148,8 @@ if __name__ == "__main__":
         # For N nodes there are N-1 links
         for i in range(len(route["path"]) - 1):
             # Get attributes of current and next node in the path
-            edge_data      = graph[route["path"][i]][route["path"][i+1]]
+            edge_data = graph[route["path"][i]][route["path"][i+1]]
             # Sum latency of current transfer path
             total_latency += edge_data["latency_ms"]
 
-        print(
-            f"  {route['flow_id']:20s} | "
-            f"{path_str:30s} | "
-            f"{hops} hops | "
-            f"latency={total_latency:.0f}ms | "
-            f"{route['size_mbps']:.2f} Mbps"
-        )
+        print(f"  {route['flow_id']:20s} | {path_str:30s} | {hops} hops | latency={total_latency:.0f}ms | {route['size_mbps']:.2f} Mbps")
