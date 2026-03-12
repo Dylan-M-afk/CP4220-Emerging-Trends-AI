@@ -5,6 +5,7 @@ venv/
 __pycache__/
 *.pyc
 *.pyo
+project/module_a/__pycache__
 
 # Shared simulation output — generated at runtime, not source code
 project/shared/state.json
