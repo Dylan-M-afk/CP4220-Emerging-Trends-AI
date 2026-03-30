@@ -29,7 +29,7 @@ MODEL_PATH    = os.path.join(MODULE_DIR,  "qtable.pkl")
 
 # ─── Hyper-parameters ─────────────────────────────────────────────────────────
 
-TICK_INTERVAL     = 5      # seconds between agent decisions (matches simulator)
+TICK_INTERVAL     = float(os.environ.get("RL_TICK_INTERVAL", 5))  # synced from run.py, or default 5s
 ALPHA             = 0.1    # online learning rate (lower than offline to avoid oscillation)
 GAMMA             = 0.9    # discount factor
 EPSILON_START     = 0.2    # initial exploration rate
