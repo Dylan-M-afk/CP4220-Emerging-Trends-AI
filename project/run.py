@@ -1,0 +1,307 @@
+# ========== Launcher ==========
+# Interactive launcher for the RL Network Simulation project.
+# Handles starting the simulator, RL agent, and evaluation report
+# as coordinated subprocesses from a single terminal.
+#
+# Usage:
+#   python run.py
+
+import os
+import sys
+import time
+import signal
+import subprocess
+
+# ─── Paths ────────────────────────────────────────────────────────────────────
+
+LAUNCHER_DIR  = os.path.dirname(os.path.abspath(__file__))
+MODULE_A_DIR  = os.path.join(LAUNCHER_DIR, "module_a")
+MODULE_B_DIR  = os.path.join(LAUNCHER_DIR, "module_b")
+SIMULATOR     = os.path.join(MODULE_A_DIR, "simulator.py")
+RL_AGENT      = os.path.join(MODULE_B_DIR, "rl_agent.py")
+TRAINER       = os.path.join(MODULE_B_DIR, "train.py")
+EVALUATOR     = os.path.join(MODULE_B_DIR, "evaluate.py")
+QTABLE        = os.path.join(MODULE_B_DIR, "qtable.pkl")
+SHARED_DIR    = os.path.join(LAUNCHER_DIR, "shared")
+HISTORY_PATH  = os.path.join(SHARED_DIR, "history.csv")
+
+PYTHON        = sys.executable  # Use the same python env that launched this script
+
+# ─── Helpers ──────────────────────────────────────────────────────────────────
+
+def clear():
+    os.system("cls" if os.name == "nt" else "clear")
+
+def sep(char="─", width=58):
+    print(char * width)
+
+def header():
+    clear()
+    sep("═")
+    print("  RL Network Simulation — Launcher")
+    sep("═")
+
+def status_line():
+    """Print a quick status summary of existing data and model files."""
+    history_rows = 0
+    if os.path.exists(HISTORY_PATH):
+        with open(HISTORY_PATH) as f:
+            history_rows = sum(1 for line in f) - 1  # subtract header
+
+    qtable_exists = os.path.exists(QTABLE)
+    rl_rows = 0
+    if os.path.exists(HISTORY_PATH):
+        with open(HISTORY_PATH) as f:
+            import csv
+            reader = csv.DictReader(f)
+            for row in reader:
+                if row.get("strategy") == "rl":
+                    rl_rows += 1
+
+    print(f"  history.csv  : {history_rows} ticks total  ({rl_rows} RL,  {history_rows - rl_rows} dijkstra)")
+    print(f"  qtable.pkl   : {'exists — agent will resume from saved state' if qtable_exists else 'not found — agent will start fresh'}")
+    sep()
+
+def wait_for_key():
+    input("\n  Press Enter to return to the menu...")
+
+def run_subprocess(cmd, cwd):
+    """
+    Run a command as a subprocess in the given working directory.
+    Returns the Popen object so the caller can manage it.
+    """
+    return subprocess.Popen(
+        cmd,
+        cwd=cwd,
+        env={**os.environ, "PYTHONUNBUFFERED": "1"},
+    )
+
+def wait_for_procs(procs: list[subprocess.Popen], labels: list[str]):
+    """
+    Block until all processes finish or the user hits Ctrl+C.
+    On Ctrl+C, sends SIGTERM (Windows: terminate) to each process gracefully.
+    """
+    print()
+    sep()
+    running_labels = ", ".join(labels)
+    print(f"  Running: {running_labels}")
+    print("  Press Ctrl+C to stop.")
+    sep()
+
+    try:
+        while True:
+            # Check if all processes have finished on their own
+            all_done = all(p.poll() is not None for p in procs)
+            if all_done:
+                break
+            time.sleep(0.5)
+    except KeyboardInterrupt:
+        print("\n  Stopping processes...")
+        for p in procs:
+            if p.poll() is None:
+                if os.name == "nt":
+                    p.terminate()
+                else:
+                    p.send_signal(signal.SIGTERM)
+        # Give them up to 5 seconds to shut down cleanly
+        deadline = time.time() + 5
+        for p in procs:
+            remaining = max(0, deadline - time.time())
+            try:
+                p.wait(timeout=remaining)
+            except subprocess.TimeoutExpired:
+                p.kill()
+
+    print("  All processes stopped.")
+
+# ─── Menu options ─────────────────────────────────────────────────────────────
+
+def option_simulator_only():
+    """Start only the Module A simulator."""
+    header()
+    print("  Starting: Simulator only (Module A)")
+    print("  Module A will write state.json and history.csv to /shared.")
+    print("  Routing will use Dijkstra — no RL agent.")
+    sep()
+    sim = run_subprocess([PYTHON, SIMULATOR], cwd=MODULE_A_DIR)
+    wait_for_procs([sim], ["Simulator"])
+    wait_for_key()
+
+def option_simulator_and_rl():
+    """Start the simulator and RL agent together."""
+    header()
+    print("  Starting: Simulator + RL Agent (Module A + B)")
+    sep()
+
+    # Offer to run train.py first if qtable doesn't exist or user wants a refresh
+    if not os.path.exists(QTABLE):
+        print("  No qtable.pkl found.")
+        print("  Running train.py to warm-start from history.csv first...")
+        print()
+        train_proc = run_subprocess([PYTHON, TRAINER], cwd=MODULE_B_DIR)
+        train_proc.wait()
+        print()
+    else:
+        print("  qtable.pkl found — RL agent will resume from saved Q-table.")
+        print("  Tip: delete qtable.pkl before launching if you want a fresh start.")
+        sep()
+
+    sim   = run_subprocess([PYTHON, SIMULATOR], cwd=MODULE_A_DIR)
+
+    # Small delay so the simulator writes its first state.json before the agent starts
+    print()
+    print("  Waiting 3 seconds for simulator to initialise...")
+    time.sleep(3)
+
+    agent = run_subprocess([PYTHON, RL_AGENT], cwd=MODULE_B_DIR)
+    wait_for_procs([sim, agent], ["Simulator", "RL Agent"])
+    wait_for_key()
+
+def option_train_only():
+    """Run train.py standalone to rebuild the Q-table from history.csv."""
+    header()
+    print("  Running: Offline trainer (train.py)")
+    print("  Reads history.csv and saves qtable.pkl.")
+    sep()
+    train_proc = run_subprocess([PYTHON, TRAINER], cwd=MODULE_B_DIR)
+    train_proc.wait()
+    wait_for_key()
+
+def option_evaluate():
+    """Run evaluate.py and display the report inline."""
+    header()
+    print("  Running: Evaluation report (evaluate.py)")
+    sep()
+    eval_proc = run_subprocess([PYTHON, EVALUATOR], cwd=MODULE_B_DIR)
+    eval_proc.wait()
+    wait_for_key()
+
+def option_simulator_and_evaluate():
+    """Run the simulator and periodically re-run evaluate.py every N ticks."""
+    header()
+    print("  Starting: Simulator + live evaluation (Module A only, no RL)")
+    print("  evaluate.py will re-run every 30 seconds automatically.")
+    sep()
+
+    sim = run_subprocess([PYTHON, SIMULATOR], cwd=MODULE_A_DIR)
+
+    print("  Running: Simulator (Dijkstra baseline only)")
+    print("  Press Ctrl+C to stop.")
+    sep()
+
+    try:
+        last_eval = time.time()
+        while sim.poll() is None:
+            if time.time() - last_eval >= 30:
+                print("\n  [Auto-evaluate]")
+                eval_proc = run_subprocess([PYTHON, EVALUATOR], cwd=MODULE_B_DIR)
+                eval_proc.wait()
+                last_eval = time.time()
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print("\n  Stopping...")
+        if sim.poll() is None:
+            sim.terminate() if os.name != "nt" else sim.kill()
+            sim.wait()
+
+    wait_for_key()
+
+# ─── Main menu ────────────────────────────────────────────────────────────────
+
+MENU = [
+    ("Simulator only",                    option_simulator_only),
+    ("Simulator + RL agent",              option_simulator_and_rl),
+    ("Simulator + RL agent + evaluate",   None),   # handled inline below
+    ("Train offline (rebuild Q-table)",   option_train_only),
+    ("Evaluate (report only)",            option_evaluate),
+    ("Exit",                              None),
+]
+
+def option_simulator_rl_and_evaluate():
+    """Start simulator + RL agent, and re-run evaluate every 30 seconds."""
+    header()
+    print("  Starting: Simulator + RL Agent + live evaluation")
+    sep()
+
+    if not os.path.exists(QTABLE):
+        print("  No qtable.pkl found — running train.py first...")
+        train_proc = run_subprocess([PYTHON, TRAINER], cwd=MODULE_B_DIR)
+        train_proc.wait()
+        print()
+    else:
+        print("  qtable.pkl found — resuming from saved Q-table.")
+        sep()
+
+    sim = run_subprocess([PYTHON, SIMULATOR], cwd=MODULE_A_DIR)
+    print("  Waiting 3 seconds for simulator to initialise...")
+    time.sleep(3)
+    agent = run_subprocess([PYTHON, RL_AGENT], cwd=MODULE_B_DIR)
+
+    print()
+    print("  Running: Simulator + RL Agent")
+    print("  evaluate.py will re-run every 30 seconds.")
+    print("  Press Ctrl+C to stop everything.")
+    sep()
+
+    try:
+        last_eval = time.time()
+        while True:
+            all_done = all(p.poll() is not None for p in [sim, agent])
+            if all_done:
+                break
+            if time.time() - last_eval >= 30:
+                print("\n  [Auto-evaluate]")
+                eval_proc = run_subprocess([PYTHON, EVALUATOR], cwd=MODULE_B_DIR)
+                eval_proc.wait()
+                last_eval = time.time()
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print("\n  Stopping all processes...")
+        for p in [sim, agent]:
+            if p.poll() is None:
+                p.terminate() if os.name != "nt" else p.kill()
+        time.sleep(2)
+        for p in [sim, agent]:
+            if p.poll() is None:
+                p.kill()
+
+    print("  All stopped.")
+    wait_for_key()
+
+
+def main():
+    while True:
+        header()
+        status_line()
+        print()
+        print("  Select an option:\n")
+        print("    1. Simulator only                  (Dijkstra baseline, no RL)")
+        print("    2. Simulator + RL agent            (live routing with Q-learning)")
+        print("    3. Simulator + RL agent + evaluate (auto-report every 30s)")
+        print("    4. Train offline                   (rebuild Q-table from history.csv)")
+        print("    5. Evaluate                        (print report, no simulation)")
+        print("    6. Exit")
+        print()
+
+        choice = input("  Enter choice [1-6]: ").strip()
+
+        if choice == "1":
+            option_simulator_only()
+        elif choice == "2":
+            option_simulator_and_rl()
+        elif choice == "3":
+            option_simulator_rl_and_evaluate()
+        elif choice == "4":
+            option_train_only()
+        elif choice == "5":
+            option_evaluate()
+        elif choice == "6":
+            print("\n  Goodbye.\n")
+            break
+        else:
+            print("\n  Invalid choice — enter a number between 1 and 6.")
+            time.sleep(1)
+
+
+if __name__ == "__main__":
+    main()
