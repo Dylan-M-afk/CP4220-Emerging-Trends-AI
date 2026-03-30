@@ -26,6 +26,71 @@ SHARED_DIR    = os.path.join(LAUNCHER_DIR, "shared")
 HISTORY_PATH  = os.path.join(SHARED_DIR, "history.csv")
 
 PYTHON        = sys.executable  # Use the same python env that launched this script
+TOPOLOGY_PATH = os.path.join(LAUNCHER_DIR, "module_a", "topology.yaml")
+
+# Minimum tick interval when the RL agent is running
+RL_MIN_TICK   = 1
+
+# ─── Tick speed helpers ──────────────────────────────────────────────────────────────────
+
+def read_current_tick_speed():
+    """Read tick_interval_seconds from topology.yaml."""
+    try:
+        import yaml
+        with open(TOPOLOGY_PATH) as f:
+            config = yaml.safe_load(f)
+        return config["simulation"].get("tick_interval_seconds", 5)
+    except Exception:
+        return 5
+
+def write_tick_speed(seconds):
+    """Overwrite tick_interval_seconds in topology.yaml, preserving all other content."""
+    import yaml
+    with open(TOPOLOGY_PATH) as f:
+        config = yaml.safe_load(f)
+    config["simulation"]["tick_interval_seconds"] = seconds
+    with open(TOPOLOGY_PATH, "w") as f:
+        yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+
+def prompt_tick_speed(with_rl):
+    """
+    Ask the user for a tick interval before launching.
+    Returns the chosen float, or None to keep the current value.
+    with_rl: if True, enforce RL_MIN_TICK floor and warn about fast speeds.
+    """
+    current = read_current_tick_speed()
+    floor   = RL_MIN_TICK if with_rl else 0
+
+    print(f"\n  Current tick speed : {current}s per tick")
+    if with_rl:
+        print(f"  Minimum with RL    : {floor}s  (agent needs time to read/write files)")
+    else:
+        print( "  Set to 0 for maximum speed (useful for generating baseline history quickly)")
+    print()
+
+    raw = input(f"  Enter tick interval in seconds [Enter to keep {current}s]: ").strip()
+
+    if raw == "":
+        return None  # keep existing
+
+    try:
+        val = float(raw)
+    except ValueError:
+        print("  Invalid input — keeping current speed.")
+        time.sleep(1)
+        return None
+
+    if val < 0:
+        print("  Cannot be negative — keeping current speed.")
+        time.sleep(1)
+        return None
+
+    if with_rl and val < floor:
+        print(f"  Clamped to {floor}s minimum (RL agent requires at least {floor}s per tick).")
+        time.sleep(1)
+        val = floor
+
+    return val
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -58,23 +123,25 @@ def status_line():
                 if row.get("strategy") == "rl":
                     rl_rows += 1
 
+    tick_speed = read_current_tick_speed()
     print(f"  history.csv  : {history_rows} ticks total  ({rl_rows} RL,  {history_rows - rl_rows} dijkstra)")
     print(f"  qtable.pkl   : {'exists — agent will resume from saved state' if qtable_exists else 'not found — agent will start fresh'}")
+    print(f"  tick speed   : {tick_speed}s per tick")
     sep()
 
 def wait_for_key():
     input("\n  Press Enter to return to the menu...")
 
-def run_subprocess(cmd, cwd):
+def run_subprocess(cmd, cwd, extra_env=None):
     """
     Run a command as a subprocess in the given working directory.
     Returns the Popen object so the caller can manage it.
+    extra_env: optional dict of additional environment variables to pass.
     """
-    return subprocess.Popen(
-        cmd,
-        cwd=cwd,
-        env={**os.environ, "PYTHONUNBUFFERED": "1"},
-    )
+    env = {**os.environ, "PYTHONUNBUFFERED": "1"}
+    if extra_env:
+        env.update(extra_env)
+    return subprocess.Popen(cmd, cwd=cwd, env=env)
 
 def wait_for_procs(procs: list[subprocess.Popen], labels: list[str]):
     """
@@ -123,6 +190,11 @@ def option_simulator_only():
     print("  Module A will write state.json and history.csv to /shared.")
     print("  Routing will use Dijkstra — no RL agent.")
     sep()
+    new_speed = prompt_tick_speed(with_rl=False)
+    if new_speed is not None:
+        write_tick_speed(new_speed)
+        print(f"  Tick speed set to {new_speed}s")
+    sep()
     sim = run_subprocess([PYTHON, SIMULATOR], cwd=MODULE_A_DIR)
     wait_for_procs([sim], ["Simulator"])
     wait_for_key()
@@ -146,6 +218,13 @@ def option_simulator_and_rl():
         print("  Tip: delete qtable.pkl before launching if you want a fresh start.")
         sep()
 
+    new_speed = prompt_tick_speed(with_rl=True)
+    if new_speed is not None:
+        write_tick_speed(new_speed)
+        print(f"  Tick speed set to {new_speed}s")
+    tick_speed = read_current_tick_speed()
+    sep()
+
     sim   = run_subprocess([PYTHON, SIMULATOR], cwd=MODULE_A_DIR)
 
     # Small delay so the simulator writes its first state.json before the agent starts
@@ -153,7 +232,9 @@ def option_simulator_and_rl():
     print("  Waiting 3 seconds for simulator to initialise...")
     time.sleep(3)
 
-    agent = run_subprocess([PYTHON, RL_AGENT], cwd=MODULE_B_DIR)
+    # Pass tick interval to agent via env so it stays in sync with the simulator
+    agent = run_subprocess([PYTHON, RL_AGENT], cwd=MODULE_B_DIR,
+                           extra_env={"RL_TICK_INTERVAL": str(tick_speed)})
     wait_for_procs([sim, agent], ["Simulator", "RL Agent"])
     wait_for_key()
 
@@ -232,10 +313,18 @@ def option_simulator_rl_and_evaluate():
         print("  qtable.pkl found — resuming from saved Q-table.")
         sep()
 
+    new_speed = prompt_tick_speed(with_rl=True)
+    if new_speed is not None:
+        write_tick_speed(new_speed)
+        print(f"  Tick speed set to {new_speed}s")
+    tick_speed = read_current_tick_speed()
+    sep()
+
     sim = run_subprocess([PYTHON, SIMULATOR], cwd=MODULE_A_DIR)
     print("  Waiting 3 seconds for simulator to initialise...")
     time.sleep(3)
-    agent = run_subprocess([PYTHON, RL_AGENT], cwd=MODULE_B_DIR)
+    agent = run_subprocess([PYTHON, RL_AGENT], cwd=MODULE_B_DIR,
+                           extra_env={"RL_TICK_INTERVAL": str(tick_speed)})
 
     print()
     print("  Running: Simulator + RL Agent")
