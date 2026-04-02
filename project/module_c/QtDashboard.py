@@ -17,19 +17,20 @@ import pyqtgraph as pg
 API_FILE = Path("project/shared/state.json")
 FETCH_INTERVAL = 2000  # ms
 ANIM_INTERVAL = 50  # ms
-STEPS_PER_FLOW = 60
+STEPS_PER_FLOW = 20
 
 NODE_RADIUS = 10
 FLOW_RADIUS = 5
+EDGE_UTIL_THRESHOLD = 0.75  # >75% utilization turns edge red
 
 # -----------------------------
 # Node positions (scaled)
 # -----------------------------
 pos = {
-    "A": (50, 50), "B": (30, 10), "C": (70, 10),
-    "D": (10, 55), "E": (25, 65), "F": (35, 70),
-    "G": (50, 80), "H": (60, 65), "J": (70, 50),
-    "K": (90, 45), "L": (70, 70),
+    "A": (50, 50), "B": (30, 70), "C": (70, 70),
+    "D": (10, 35), "E": (25, 25), "F": (35, 20),
+    "G": (50, 10), "H": (60, 25), "J": (70, 50),
+    "K": (90, 55), "L": (70, 20),
 }
 SCALE = 7
 pos_scaled = {n: (x*SCALE, y*SCALE) for n, (x, y) in pos.items()}
@@ -110,6 +111,7 @@ class Dashboard(QWidget):
         self.edge_items = {}
         self.flows = []
 
+        self.link_utilization = {}
         self.node_utilization = {n: 0 for n in pos}
         self.build_topology()
 
@@ -136,13 +138,13 @@ class Dashboard(QWidget):
         for node, (x, y) in pos_scaled.items():
             ellipse = QGraphicsEllipseItem(-NODE_RADIUS, -NODE_RADIUS, NODE_RADIUS*2, NODE_RADIUS*2)
             ellipse.setPos(x, y)
-            ellipse.setBrush(QBrush(QColor("lightgray")))
+            ellipse.setBrush(QBrush(QColor("black")))
             ellipse.setPen(QPen(Qt.GlobalColor.black))
             self.scene.addItem(ellipse)
             self.node_items[node] = ellipse
 
     # -----------------------------
-    # Fetch state
+    # Fetch state (flows)
     # -----------------------------
     def fetch_state(self):
         try:
@@ -152,80 +154,81 @@ class Dashboard(QWidget):
             print("Error reading state:", e)
             return
 
-        # --- Flows ---
+        # Update link utilizations
+        self.link_utilization = state.get("link_metrics", {})
+
+        # Update edge colors based on utilization
+        for edge_name, line in self.edge_items.items():
+            util = self.link_utilization.get(edge_name, {}).get("utilization", 0)
+            color = QColor("red") if util >= EDGE_UTIL_THRESHOLD else QColor("green")
+            line.setPen(QPen(color, 3))
+
+        # Update node bar graph targets
+        for i, node in enumerate(self.node_names):
+            # Max utilization of any edge connected to this node
+            connected_edges = [k for k in self.link_utilization if node in k.split("<->")]
+            max_util = max([self.link_utilization[e]["utilization"] for e in connected_edges], default=0)
+            self.bar_target[i] = max_util*100
+
+        # Update average utilization line
+        avg_util = sum([self.link_utilization[e]["utilization"] for e in self.link_utilization]) / max(1, len(self.link_utilization))
+        self.avg_history.append(avg_util*100)
+        self.line_curve.setData(list(self.avg_history))
+
+        # Remove finished flows
+        active_flow_ids = [route["flow_id"] for route in state.get("routes", [])]
+        for flow in self.flows[:]:
+            if flow["flow_id"] not in active_flow_ids:
+                self.scene.removeItem(flow["graphics_item"])
+                self.flows.remove(flow)
+
+        # Create new flows
         for route in state.get("routes", []):
+            flow_id = route["flow_id"]
+            if any(f['flow_id'] == flow_id for f in self.flows):
+                continue  # already exists
             path_nodes = route.get("path", [])
             if len(path_nodes) < 2:
                 continue
+            # Interpolate path points
             xs_total = []
             for i in range(len(path_nodes)-1):
                 xs_total += interpolate(pos_scaled[path_nodes[i]], pos_scaled[path_nodes[i+1]], STEPS_PER_FLOW)
-            # skip duplicate flows
-            if any(f['flow_id'] == route['flow_id'] for f in self.flows):
-                continue
+            # Create graphics item at first path point
             ellipse = QGraphicsEllipseItem(-FLOW_RADIUS, -FLOW_RADIUS, FLOW_RADIUS*2, FLOW_RADIUS*2)
             ellipse.setBrush(QBrush(QColor("blue")))
+            ellipse.setPos(*xs_total[0])
             self.scene.addItem(ellipse)
             self.flows.append({
-                "flow_id": route["flow_id"],
+                "flow_id": flow_id,
                 "path": xs_total,
                 "current_step": 0,
                 "graphics_item": ellipse
             })
 
-        # --- Update edge utilization & node bar targets ---
-        link_metrics = state.get("link_metrics", {})
-        # edge coloring & bar graph target values
-        max_node_util = {n: 0 for n in pos}
-        for link, metrics in link_metrics.items():
-            utilization = metrics.get("utilization", 0)
-            color = QColor(255,0,0) if utilization >= 0.75 else QColor(0,255,0)
-            # Update edge color
-            if link in self.edge_items:
-                self.edge_items[link].setPen(QPen(color, 3))
-            else:
-                # links might be reversed
-                rev = "<->".join(link.split("<->")[::-1])
-                if rev in self.edge_items:
-                    self.edge_items[rev].setPen(QPen(color,3))
-            # update max per node
-            nodes = link.split("<->")
-            for n in nodes:
-                max_node_util[n] = max(max_node_util[n], utilization*100)
-        self.bar_target = [max_node_util[n] for n in self.node_names]
-
-        # --- Average utilization for line chart ---
-        avg_util = sum(max_node_util.values()) / len(pos)
-        self.avg_history.append(avg_util)
-        self.line_curve.setData(list(self.avg_history))
-
     # -----------------------------
-    # Animate flows & update visuals
+    # Animate flows and update bar graph
     # -----------------------------
     def update_animation(self):
         step_size = 2  # percent per frame
 
-        # --- Animate flows ---
-        active_flows = []
-        for flow in self.flows:
-            step = flow["current_step"]
-            if step < len(flow["path"]):
-                x, y = flow["path"][step]
+        # Animate flows
+        for flow in self.flows[:]:
+            if flow["current_step"] < len(flow["path"]):
+                x, y = flow["path"][flow["current_step"]]
                 flow["graphics_item"].setPos(x, y)
                 flow["current_step"] += 1
-                active_flows.append(flow)
             else:
                 self.scene.removeItem(flow["graphics_item"])
-        self.flows[:] = active_flows
+                self.flows.remove(flow)
 
-        # --- Step-based bar graph animation ---
+        # Animate bar graph
         for i, target in enumerate(self.bar_target):
             if self.bar_displayed[i] < target:
                 self.bar_displayed[i] = min(self.bar_displayed[i] + step_size, target)
             elif self.bar_displayed[i] > target:
                 self.bar_displayed[i] = max(self.bar_displayed[i] - step_size, target)
 
-        # Clear previous bars and redraw
         self.bar_widget.clear()
         for i, val in enumerate(self.bar_displayed):
             color = QColor(255, 0, 0) if val >= 75 else QColor(0, 255, 0)
