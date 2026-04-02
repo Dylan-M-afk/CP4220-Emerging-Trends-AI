@@ -31,23 +31,24 @@ def poll_network_parameter_config(config_path=NETWORK_CONFIG_PATH):
     network_parameter_config = graph_module.get_network_parameters(config_path)
 
     # obtain traffic and simulation configurations
-    traffic_cfg   = network_parameter_config["traffic"]
-    sim_cfg       = network_parameter_config["simulation"]
+    traffic_cfg = network_parameter_config["traffic"]
+    sim_cfg = network_parameter_config["simulation"]
     # get tick configuration parameters
     tick_interval = sim_cfg.get("tick_interval_seconds", 5)
-    max_ticks     = sim_cfg.get("max_ticks", None)
+    max_ticks = sim_cfg.get("max_ticks", None)
+    use_rl = sim_cfg.get("use_rl", None)
     # get paths of log-file directory and RL-model output
-    shared_dir    = resolve_shared_dir(sim_cfg)
-    rl_path       = rl_decision_path(shared_dir)
+    shared_dir = resolve_shared_dir(sim_cfg)
+    rl_path = rl_decision_path(shared_dir)
 
-    return traffic_cfg, tick_interval, max_ticks, shared_dir, rl_path
+    return traffic_cfg, tick_interval, max_ticks, shared_dir, rl_path, use_rl
 
 def main():
     # Generate network graph from topology config
     graph, topology_config = graph_module.get_graph(TOPOLOGY_CONFIG_PATH)
     
     # Get network parameters from parameter config
-    traffic_cfg, tick_interval, max_ticks, shared_dir, rl_path = poll_network_parameter_config(NETWORK_CONFIG_PATH)
+    traffic_cfg, tick_interval, max_ticks, shared_dir, rl_path, use_rl = poll_network_parameter_config(NETWORK_CONFIG_PATH)
 
     # verify shared log directory exists
     os.makedirs(shared_dir, exist_ok=True)
@@ -83,17 +84,17 @@ def main():
 
         try:
             # Poll network parameters config to check for updates from Module C
-            traffic_cfg, tick_interval, max_ticks, shared_dir, rl_path = poll_network_parameter_config(NETWORK_CONFIG_PATH)
+            traffic_cfg, tick_interval, max_ticks, shared_dir, rl_path, use_rl = poll_network_parameter_config(NETWORK_CONFIG_PATH)
 
             # Randomly generate network transfers
             flows = generate_flows(graph, traffic_cfg, tick_number=tick)
 
             # Route transfers across nodes
-            routes, strategy = get_routes(graph, flows, rl_decision_path=rl_path)
+            routes, strategy = get_routes(graph, flows, use_rl, rl_decision_path=rl_path)
 
             # Compute metrics of edges and generate summary of metrics
             link_metrics = compute_link_metrics(graph, routes)
-            summary      = compute_network_summary(link_metrics)
+            summary = compute_network_summary(link_metrics)
 
             # Log simulator state and tick history
             write_all(shared_dir, tick, strategy, flows, routes, link_metrics, summary)
@@ -105,7 +106,7 @@ def main():
             print(f"Tick {tick:>4} | ERROR — {e}")
 
         # Sleep for remainder of tick interval
-        elapsed    = time.time() - tick_start
+        elapsed = time.time() - tick_start
         # Calculate remaining time
         sleep_time = max(0.0, tick_interval - elapsed)
         time.sleep(sleep_time)

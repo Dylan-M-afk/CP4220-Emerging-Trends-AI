@@ -94,13 +94,13 @@ def load_rl_routes(rl_decision_path, flows):
 
 # Calculates shortest path for each network transfer using RL feedback where available and Dijkstra's algorithm when RL output is stale or unavailable
 # Called on each tick of the simulator
-def get_routes(graph, flows, rl_decision_path=None):
+def get_routes(graph, flows, use_rl, rl_decision_path=None):
     # Attach graph to transfer temporarily for use in RL fallback use of Dijkstra's pathing algorithm
     for flow in flows:
         flow["_graph"] = graph
 
     # If rl file path exists
-    if rl_decision_path:
+    if use_rl and rl_decision_path:
         # Load RL pathing data
         rl_routes = load_rl_routes(rl_decision_path, flows)
         # If rl_routes are valid
