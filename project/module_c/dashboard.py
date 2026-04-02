@@ -4,10 +4,10 @@ from dash.dependencies import Input, Output
 import plotly.graph_objects as go
 import requests
 
+# -----------------------------
+# API
+# -----------------------------
 API_URL = "http://127.0.0.1:8000/state"
-
-app = dash.Dash(__name__)
-app.title = "Network Dashboard"
 
 # -----------------------------
 # Node positions
@@ -35,17 +35,19 @@ topology_edges = [
 STEPS = 90
 ANIM_INTERVAL = 50
 FETCH_INTERVAL = 3000
-BAR_ANIM_STEPS = 15  # number of steps to animate bars
+BAR_ANIM_STEPS = 15
+MAX_HISTORY = 100  # performance line points
 
 # -----------------------------
 # Global state
 # -----------------------------
 flow_cache = []
-node_colors = {}
 node_utilization = {}
-prev_node_utilization = {}  # for smooth animation
+prev_node_utilization = {}
+node_colors = {}
 bar_step_index = 0
 bar_animating = False
+performance_history = []
 
 # -----------------------------
 # Interpolation
@@ -92,8 +94,11 @@ def build_nodes():
     return traces
 
 # -----------------------------
-# Layout with Tabs
+# Dash app layout
 # -----------------------------
+app = dash.Dash(__name__)
+app.title = "Network Dashboard"
+
 app.layout = html.Div([
     html.H2("Network Dashboard"),
     dcc.Tabs([
@@ -102,23 +107,26 @@ app.layout = html.Div([
         ]),
         dcc.Tab(label="Node Congestion", children=[
             dcc.Graph(id="node-congestion")
+        ]),
+        dcc.Tab(label="Performance Over Time", children=[
+            dcc.Graph(id="performance-line")
         ])
     ]),
-    dcc.Interval(id="anim-loop", interval=ANIM_INTERVAL, n_intervals=0),
     dcc.Interval(id="fetch-loop", interval=FETCH_INTERVAL, n_intervals=0),
+    dcc.Interval(id="anim-loop", interval=ANIM_INTERVAL, n_intervals=0)
 ])
 
 # -----------------------------
 # Fetch loop
 # -----------------------------
-
 @app.callback(
-    Output("network-graph", "figure", allow_duplicate=True),  # only network-graph figure
+    Output("network-graph", "figure", allow_duplicate=True),
     Input("fetch-loop", "n_intervals"),
     prevent_initial_call=True
 )
 def fetch_data(_):
-    global flow_cache, node_colors, node_utilization, prev_node_utilization, bar_step_index, bar_animating
+    global flow_cache, node_utilization, prev_node_utilization, node_colors
+    global bar_step_index, bar_animating, performance_history
 
     try:
         res = requests.get(API_URL)
@@ -128,7 +136,7 @@ def fetch_data(_):
         print("API error:", e)
         return dash.no_update
 
-    # --- Node congestion & utilization ---
+    # --- Node utilization ---
     prev_node_utilization = node_utilization.copy()
     node_utilization = {}
     node_colors = {}
@@ -165,7 +173,13 @@ def fetch_data(_):
             "steps": len(xs_total)
         })
 
-    return dash.no_update  # remove node-congestion.figure from here
+    # --- Update performance history ---
+    avg_util = sum(node_utilization.values()) / len(node_utilization)
+    performance_history.append(avg_util)
+    if len(performance_history) > MAX_HISTORY:
+        performance_history.pop(0)
+
+    return dash.no_update
 
 # -----------------------------
 # Animation loop
@@ -173,12 +187,13 @@ def fetch_data(_):
 @app.callback(
     Output("network-graph", "figure"),
     Output("node-congestion", "figure"),
+    Output("performance-line", "figure"),
     Input("anim-loop", "n_intervals")
 )
 def animate(_):
     global flow_cache, bar_step_index, bar_animating
 
-    # --- Animate network flows ---
+    # --- Network figure ---
     fig_net = go.Figure()
     fig_net.add_traces(edges_static)
     fig_net.add_traces(build_nodes())
@@ -202,7 +217,7 @@ def animate(_):
             active_flows.append(flow)
     flow_cache[:] = active_flows
 
-    # --- Animate congestion bars ---
+    # --- Node congestion bars ---
     if bar_animating:
         t = (bar_step_index + 1) / BAR_ANIM_STEPS
         y_vals = []
@@ -210,7 +225,6 @@ def animate(_):
             prev = prev_node_utilization.get(node, 0)
             curr = node_utilization.get(node, 0)
             y_vals.append(prev + (curr - prev) * t)
-
         bar_step_index += 1
         if bar_step_index >= BAR_ANIM_STEPS:
             bar_step_index = 0
@@ -233,7 +247,21 @@ def animate(_):
         showlegend=False
     )
 
-    # --- Layout tweaks for network ---
+    # --- Performance line ---
+    fig_perf = go.Figure()
+    fig_perf.add_trace(go.Scatter(
+        y=[v*100 for v in performance_history],
+        mode="lines+markers",
+        line=dict(color="orange", width=2),
+        marker=dict(size=4)
+    ))
+    fig_perf.update_layout(
+        yaxis=dict(title="Avg Node Utilization (%)", range=[0,100]),
+        xaxis=dict(title="Time (ticks)"),
+        margin=dict(l=20,r=20,t=20,b=20)
+    )
+
+    # --- Network layout tweaks ---
     fig_net.update_layout(
         showlegend=False,
         xaxis=dict(showgrid=False, zeroline=False, visible=False),
@@ -243,10 +271,8 @@ def animate(_):
         transition_duration=0
     )
 
-    return fig_net, fig_bar
+    return fig_net, fig_bar, fig_perf
 
-# -----------------------------
-# Run server
 # -----------------------------
 if __name__ == "__main__":
     app.run(debug=True)
