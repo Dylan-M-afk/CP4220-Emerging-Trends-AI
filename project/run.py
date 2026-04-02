@@ -27,6 +27,7 @@ HISTORY_PATH  = os.path.join(SHARED_DIR, "history.csv")
 
 PYTHON        = sys.executable  # Use the same python env that launched this script
 TOPOLOGY_PATH = os.path.join(LAUNCHER_DIR, "module_a", "topology.yaml")
+NETWORK_PARAMETERS_PATH = os.path.join(LAUNCHER_DIR, "module_a", "network_parameters.yaml")
 
 # Minimum tick interval when the RL agent is running
 RL_MIN_TICK   = 1
@@ -34,10 +35,10 @@ RL_MIN_TICK   = 1
 # ─── Tick speed helpers ──────────────────────────────────────────────────────────────────
 
 def read_current_tick_speed():
-    """Read tick_interval_seconds from topology.yaml."""
+    """Read tick_interval_seconds from network_parameters.yaml."""
     try:
         import yaml
-        with open(TOPOLOGY_PATH) as f:
+        with open(NETWORK_PARAMETERS_PATH) as f:
             config = yaml.safe_load(f)
         return config["simulation"].get("tick_interval_seconds", 5)
     except Exception:
@@ -46,10 +47,10 @@ def read_current_tick_speed():
 def write_tick_speed(seconds):
     """Overwrite tick_interval_seconds in topology.yaml, preserving all other content."""
     import yaml
-    with open(TOPOLOGY_PATH) as f:
+    with open(NETWORK_PARAMETERS_PATH) as f:
         config = yaml.safe_load(f)
     config["simulation"]["tick_interval_seconds"] = seconds
-    with open(TOPOLOGY_PATH, "w") as f:
+    with open(NETWORK_PARAMETERS_PATH, "w") as f:
         yaml.dump(config, f, default_flow_style=False, sort_keys=False)
 
 def prompt_tick_speed(with_rl):

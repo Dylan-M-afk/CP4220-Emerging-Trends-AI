@@ -1,20 +1,10 @@
-# ========== Network Parameter Configuration ==========
-# This file is responsible for defining the dynamically adjustable parameters of the network
-# which can be modifed by Module C
-
-# ========== Traffic Config ==========
-# Controls rate of occurance and throughput size of packet transfers
 traffic:
   num_transfers: 8
   min_transfer_mbps: 10
   max_transfer_mbps: 150
   seed: 42
-
-# ========== Simulation Config ==========
-# Controls the tick speed and duration of the simulation, use of RL model routing and the destination of outputted log data
 simulation:
-  tick_interval_seconds: 5
+  tick_interval_seconds: 5.0
   max_ticks: null
-  shared: "../shared"
+  shared: ../shared
   use_rl: true
-
