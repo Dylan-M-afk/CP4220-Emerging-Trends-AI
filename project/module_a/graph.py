@@ -7,6 +7,7 @@ import yaml
 import networkx as nx
 
 PATH_TOPOLOGY_CONFIG = os.path.join(os.path.dirname(__file__), "topology.yaml")
+PATH_NETWORK_CONFIG = os.path.join(os.path.dirname(__file__), "network_parameters.yaml")
 
 # Read YAML topology configuration as dict
 def load_config(config_path):
@@ -45,12 +46,16 @@ def get_graph(config_path=PATH_TOPOLOGY_CONFIG):
     graph = build_graph(config)
     return graph, config
 
+# Load network parameter config
+def get_network_parameters(config_path=PATH_NETWORK_CONFIG):
+    config = load_config(config_path)
+    return config
 
 # Test to ensure all nodes and edges loaded and connected to one another
 if __name__ == "__main__":
-    graph, config = get_graph(PATH_TOPOLOGY_CONFIG)
+    graph, topology_config = get_graph(PATH_TOPOLOGY_CONFIG)
 
-    print(f"Network : {config['network']['name']}")
+    print(f"Network : {topology_config['network']['name']}")
     print(f"Nodes   : {graph.number_of_nodes()}")
     print(f"Edges   : {graph.number_of_edges()}")
     print()

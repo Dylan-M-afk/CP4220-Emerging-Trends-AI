@@ -5,16 +5,16 @@ import numpy as np
 
 # Generate a list of random transfers for the current tick
 # - graph           : graph of the current network for getting available nodes
-# - traffic_config  : traffic configuration from topology.yaml
+# - network_config  : network parameter configuration from network_parameters.yaml
 # - tick_number     : current tick count
 # - return          : list of transfers in dict format
-def generate_flows(graph, traffic_config, tick_number):
+def generate_flows(graph, network_config, tick_number):
     # Number of transfers per tick
-    num_transfers    = traffic_config["num_transfers"]
+    num_transfers    = network_config["num_transfers"]
     # Range of data size for packet transfer
-    min_size       = traffic_config["min_transfer_mbps"]
-    max_size       = traffic_config["max_transfer_mbps"]
-    base_seed        = traffic_config["seed"]
+    min_size = network_config["min_transfer_mbps"]
+    max_size = network_config["max_transfer_mbps"]
+    base_seed = network_config["seed"]
 
     # Use seeded random for reproducible results, offset by tick number to vary transfer properties
     rng = np.random.default_rng(base_seed + tick_number)
@@ -42,16 +42,16 @@ def generate_flows(graph, traffic_config, tick_number):
 
 # Test flow generation
 if __name__ == "__main__":
-    from graph import get_graph, PATH_TOPOLOGY_CONFIG
+    from graph import get_graph, get_network_parameters, PATH_TOPOLOGY_CONFIG, PATH_NETWORK_CONFIG
 
     # Get network graph and configs
     graph, config = get_graph(PATH_TOPOLOGY_CONFIG)
-    traffic_config = config["traffic"]
+    traffic_config = get_network_parameters(PATH_NETWORK_CONFIG)
 
     # Print flows for three consecutive ticks to show variation
     for tick in range(3):
         # Generate flows for 3 ticks
-        flows = generate_flows(graph, traffic_config, tick_number=tick)
+        flows = generate_flows(graph, traffic_config["traffic"], tick_number=tick)
         # Get total size of all transfers per tick
         total_size = sum(f["size_mbps"] for f in flows)
 

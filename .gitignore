@@ -12,3 +12,6 @@ project/shared/state.json
 shared/state.tmp.json
 project/shared/history.csv
 shared/routing_decision.json
+# Branch additions
+/project/module_b/qtable.pkl
+/project/shared/routing_decision.json

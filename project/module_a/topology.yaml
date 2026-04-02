@@ -16,13 +16,13 @@ network:
     - id: D
       label: "Graphic Design"
     - id: E
-      label: "???"
+      label: "Maintenance"
     - id: F
       label: "Library"
     - id: G
       label: "Cafeteria"
     - id: H
-      label: "???"
+      label: "Spare Classrooms"
     - id: J
       label: "Industrial Trades"
     - id: K
@@ -114,17 +114,17 @@ network:
       latency_ms: 3
       loss_rate: 0.002
 
-# ========== Traffic Config ==========
-# Controls rate of occurance and throughput size of packet transfers
-traffic:
-  num_transfers: 8
-  min_transfer_mbps: 10
-  max_transfer_mbps: 150
-  seed: 42
+# # ========== Traffic Config ==========
+# # Controls rate of occurance and throughput size of packet transfers
+# traffic:
+#   num_transfers: 8
+#   min_transfer_mbps: 10
+#   max_transfer_mbps: 150
+#   seed: 42
 
-# ========== Simulation Config ==========
-# Controls the tick speed and duration of the simulation, and the destination of outputted log data
-simulation:
-  tick_interval_seconds: 5
-  max_ticks: null
-  shared: "../shared"
+# # ========== Simulation Config ==========
+# # Controls the tick speed and duration of the simulation, and the destination of outputted log data
+# simulation:
+#   tick_interval_seconds: 5
+#   max_ticks: null
+#   shared: "../shared"

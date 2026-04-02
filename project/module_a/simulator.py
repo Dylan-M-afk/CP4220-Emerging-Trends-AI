@@ -12,10 +12,11 @@ from routing      import get_routes
 from metrics      import compute_link_metrics, compute_network_summary
 from state_writer import write_all
 
-# Construct required paths to config file and shared log directory
+# Construct required paths to config files and shared log directory
 
 MODULE_DIR  = os.path.dirname(os.path.abspath(__file__))
-CONFIG_PATH = graph_module.PATH_TOPOLOGY_CONFIG
+TOPOLOGY_CONFIG_PATH = graph_module.PATH_TOPOLOGY_CONFIG
+NETWORK_CONFIG_PATH = graph_module.PATH_NETWORK_CONFIG
 
 def resolve_shared_dir(sim_config):
     raw = sim_config.get("shared", "../shared")
@@ -24,13 +25,14 @@ def resolve_shared_dir(sim_config):
 def rl_decision_path(shared_dir):
     return os.path.join(shared_dir, "routing_decision.json")
 
-def main():
-    # Generate network graph from topology config
-    graph, config = graph_module.get_graph(CONFIG_PATH)
+# Check network parameter configuration for current parameters
+# Parameters are expected to be updated during simulation by Module C
+def poll_network_parameter_config(config_path=NETWORK_CONFIG_PATH):
+    network_parameter_config = graph_module.get_network_parameters(config_path)
 
     # obtain traffic and simulation configurations
-    traffic_cfg   = config["traffic"]
-    sim_cfg       = config["simulation"]
+    traffic_cfg   = network_parameter_config["traffic"]
+    sim_cfg       = network_parameter_config["simulation"]
     # get tick configuration parameters
     tick_interval = sim_cfg.get("tick_interval_seconds", 5)
     max_ticks     = sim_cfg.get("max_ticks", None)
@@ -38,10 +40,19 @@ def main():
     shared_dir    = resolve_shared_dir(sim_cfg)
     rl_path       = rl_decision_path(shared_dir)
 
+    return traffic_cfg, tick_interval, max_ticks, shared_dir, rl_path
+
+def main():
+    # Generate network graph from topology config
+    graph, topology_config = graph_module.get_graph(TOPOLOGY_CONFIG_PATH)
+    
+    # Get network parameters from parameter config
+    traffic_cfg, tick_interval, max_ticks, shared_dir, rl_path = poll_network_parameter_config(NETWORK_CONFIG_PATH)
+
     # verify shared log directory exists
     os.makedirs(shared_dir, exist_ok=True)
 
-    print(f"Network   : {config['network']['name']}")
+    print(f"Network   : {topology_config['network']['name']}")
     print(f"Nodes     : {graph.number_of_nodes()}  |  Links: {graph.number_of_edges()}")
     print(f"Tick rate : every {tick_interval}s")
     print(f"Max ticks : {max_ticks if max_ticks else 'unlimited'}")
@@ -71,6 +82,9 @@ def main():
         tick_start = time.time()
 
         try:
+            # Poll network parameters config to check for updates from Module C
+            traffic_cfg, tick_interval, max_ticks, shared_dir, rl_path = poll_network_parameter_config(NETWORK_CONFIG_PATH)
+
             # Randomly generate network transfers
             flows = generate_flows(graph, traffic_cfg, tick_number=tick)
 
