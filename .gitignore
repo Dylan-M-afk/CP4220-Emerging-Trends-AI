@@ -11,4 +11,5 @@ project/module_a/__pycache__
 project/shared/state.json
 shared/state.tmp.json
 project/shared/history.csv
-shared/routing_decision.json
+project/shared/routing_decision.json
+project/module_b/qtable.pkl
