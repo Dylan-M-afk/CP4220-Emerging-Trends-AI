@@ -15,3 +15,5 @@ shared/routing_decision.json
 # Branch additions
 /project/module_b/qtable.pkl
 /project/shared/routing_decision.json
+project/shared/routing_decision.json
+project/module_b/qtable.pkl
