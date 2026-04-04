@@ -1,0 +1,10 @@
+traffic:
+  num_transfers: 8
+  min_transfer_mbps: 10
+  max_transfer_mbps: 150
+  seed: 42
+simulation:
+  tick_interval_seconds: 5.0
+  max_ticks: null
+  shared: ../shared
+  use_rl: true

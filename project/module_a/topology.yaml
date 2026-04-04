@@ -1,108 +1,124 @@
 network:
   name: CNA Network Topology
   nodes:
-  - id: A
-    label: Lobby
-  - id: B
-    label: Arts & Admin
-  - id: C
-    label: Bookstore
-  - id: D
-    label: Graphic Design
-  - id: E
-    label: ???
-  - id: F
-    label: Library
-  - id: G
-    label: Cafeteria
-  - id: H
-    label: ???
-  - id: J
-    label: Industrial Trades
-  - id: K
-    label: IT Department
-  - id: L
-    label: Fabrics & Textiles
+    - id: A
+      label: "Lobby"
+    - id: B
+      label: "Arts & Admin"
+    - id: C
+      label: "Bookstore"
+    - id: D
+      label: "Graphic Design"
+    - id: E
+      label: "Maintenance"
+    - id: F
+      label: "Library"
+    - id: G
+      label: "Cafeteria"
+    - id: H
+      label: "Spare Classrooms"
+    - id: J
+      label: "Industrial Trades"
+    - id: K
+      label: "IT Department"
+    - id: L
+      label: "Fabrics & Textiles"
+  
+  # Links represent the pathways which join nodes together
+  # Each link has a throughput capacity, a propogation rate, and packet loss rate
   links:
-  - source: A
-    target: B
-    capacity_mbps: 300
-    latency_ms: 5
-    loss_rate: 0.002
-  - source: A
-    target: F
-    capacity_mbps: 800
-    latency_ms: 2
-    loss_rate: 0.001
-  - source: A
-    target: G
-    capacity_mbps: 500
-    latency_ms: 4
-    loss_rate: 0.001
-  - source: A
-    target: H
-    capacity_mbps: 200
-    latency_ms: 8
-    loss_rate: 0.003
-  - source: B
-    target: C
-    capacity_mbps: 500
-    latency_ms: 5
-    loss_rate: 0.001
-  - source: B
-    target: D
-    capacity_mbps: 400
-    latency_ms: 6
-    loss_rate: 0.002
-  - source: C
-    target: J
-    capacity_mbps: 700
-    latency_ms: 4
-    loss_rate: 0.001
-  - source: D
-    target: E
-    capacity_mbps: 500
-    latency_ms: 2
-    loss_rate: 0.005
-  - source: E
-    target: F
-    capacity_mbps: 800
-    latency_ms: 3
-    loss_rate: 0.001
-  - source: F
-    target: G
-    capacity_mbps: 800
-    latency_ms: 5
-    loss_rate: 0.002
-  - source: G
-    target: L
-    capacity_mbps: 400
-    latency_ms: 5
-    loss_rate: 0.004
-  - source: H
-    target: J
-    capacity_mbps: 500
-    latency_ms: 3
-    loss_rate: 0.001
-  - source: J
-    target: K
-    capacity_mbps: 1000
-    latency_ms: 2
-    loss_rate: 0.001
-  - source: K
-    target: L
-    capacity_mbps: 1000
-    latency_ms: 3
-    loss_rate: 0.002
-traffic:
-  num_transfers: 8
-  min_transfer_mbps: 10
-  max_transfer_mbps: 150
-  seed: 42
+    # A => Nodes
+    - source: A
+      target: B
+      capacity_mbps: 300
+      latency_ms: 5
+      loss_rate: 0.002
+    - source: A
+      target: F
+      capacity_mbps: 800
+      latency_ms: 2
+      loss_rate: 0.001
+    - source: A
+      target: G
+      capacity_mbps: 500
+      latency_ms: 4
+      loss_rate: 0.001
+    - source: A
+      target: H
+      capacity_mbps: 200
+      latency_ms: 8
+      loss_rate: 0.003
+    # B => Nodes
+    - source: B
+      target: C
+      capacity_mbps: 500
+      latency_ms: 5
+      loss_rate: 0.001
+    - source: B
+      target: D
+      capacity_mbps: 400
+      latency_ms: 6
+      loss_rate: 0.002
+    # C => Nodes
+    - source: C
+      target: J
+      capacity_mbps: 700
+      latency_ms: 4
+      loss_rate: 0.001
+    # D => Nodes
+    - source: D
+      target: E
+      capacity_mbps: 500
+      latency_ms: 2
+      loss_rate: 0.005
+    # E => Nodes
+    - source: E
+      target: F
+      capacity_mbps: 800
+      latency_ms: 3
+      loss_rate: 0.001
+    # F => Nodes
+    - source: F
+      target: G
+      capacity_mbps: 800
+      latency_ms: 5
+      loss_rate: 0.002
+    # G => Nodes
+    - source: G
+      target: L
+      capacity_mbps: 400
+      latency_ms: 5
+      loss_rate: 0.004
+    # H => Nodes
+    - source: H
+      target: J
+      capacity_mbps: 500
+      latency_ms: 3
+      loss_rate: 0.001
+    # J => Nodes
+    - source: J
+      target: K
+      capacity_mbps: 1000
+      latency_ms: 2
+      loss_rate: 0.001
+    # K => Nodes
+    - source: K
+      target: L
+      capacity_mbps: 1000
+      latency_ms: 3
+      loss_rate: 0.002
 
-# ========== Simulation Config ==========
-# Controls the tick speed and duration of the simulation, and the destination of outputted log data
-simulation:
-  tick_interval_seconds: 3.0
-  max_ticks: null
-  shared: ../shared
+# # ========== Traffic Config ==========
+# # Controls rate of occurance and throughput size of packet transfers
+# traffic:
+#   num_transfers: 8
+#   min_transfer_mbps: 10
+#   max_transfer_mbps: 150
+#   seed: 42
+
+# # ========== Simulation Config ==========
+# # Controls the tick speed and duration of the simulation, and the destination of outputted log data
+# simulation:
+#   tick_interval_seconds: 5
+#   max_ticks: null
+#   shared: "../shared"
