@@ -2,6 +2,7 @@ import sys
 import json
 from collections import deque
 from pathlib import Path
+import os
 
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QGraphicsScene, QGraphicsView,
@@ -14,7 +15,9 @@ import pyqtgraph as pg
 # -----------------------------
 # Config
 # -----------------------------
-API_FILE = Path("project/shared/state.json")
+MODULE_DIR = Path(os.path.abspath(__file__)).parent
+API_FILE   = MODULE_DIR.parent / "shared" / "state.json"
+
 FETCH_INTERVAL = 2000  # ms
 ANIM_INTERVAL = 50  # ms
 STEPS_PER_FLOW = 20
