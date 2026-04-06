@@ -7,8 +7,7 @@ import csv
 import shutil
 from datetime import datetime, timezone
 
-# CSV column order
-CSV_COLUMNS = [
+CSV_BASE_COLUMNS = [
     "tick",
     "timestamp",
     "strategy",
@@ -23,6 +22,17 @@ CSV_COLUMNS = [
     "congested_links",
     "total_links",
 ]
+
+def _link_columns(link_metrics: dict) -> list[str]:
+    """
+    Return a stable sorted list of per-link column names derived from
+    link_metrics keys, e.g. ["link_util_A<->B", "link_util_A<->F", …].
+    Sorting ensures every row uses the same column order.
+    """
+    return [f"link_util_{a}<->{b}" for (a, b) in sorted(link_metrics.keys())]
+
+def _all_columns(link_metrics: dict) -> list[str]:
+    return CSV_BASE_COLUMNS + _link_columns(link_metrics)
 
 # Write state of edge to json for logging
 def write_state(shared_dir, tick_number, strategy, flows, routes, link_metrics, summary):
@@ -50,12 +60,20 @@ def write_state(shared_dir, tick_number, strategy, flows, routes, link_metrics, 
     shutil.move(temp_path, final_path)
 
 # Track tick history across simulation
-def append_history(shared_dir, tick_number, strategy, flows, summary):
+def append_history(shared_dir, tick_number, strategy, flows, summary, link_metrics):
     path       = os.path.join(shared_dir, "history.csv")
-    # Check if this is the first tick based on presnce of history file
+    # Check if this is the first tick based on presence of history file
     first_tick = not os.path.exists(path)
-    # Calculate total size of all data transfered during current tick
+    # Calculate total size of all data transferred during current tick
     total_load = round(sum(f["size_mbps"] for f in flows), 2)
+
+    # Build per-link utilization columns
+    link_util_row = {
+        f"link_util_{a}<->{b}": metrics["utilization"]
+        for (a, b), metrics in link_metrics.items()
+    }
+
+    all_columns = _all_columns(link_metrics)
 
     row = {
         "tick"               : tick_number,
@@ -71,11 +89,12 @@ def append_history(shared_dir, tick_number, strategy, flows, summary):
         "max_effective_loss" : summary["max_effective_loss"],
         "congested_links"    : summary["congested_links"],
         "total_links"        : summary["total_links"],
+        **link_util_row,
     }
 
     # Append current tick data to history
     with open(path, "a", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=CSV_COLUMNS)
+        writer = csv.DictWriter(f, fieldnames=all_columns)
         if first_tick:
             # Add column headers before tick row if first tick of simulation
             writer.writeheader()
@@ -88,7 +107,8 @@ def write_all(shared_dir, tick_number, strategy, flows, routes, link_metrics, su
 
     # Log to files
     write_state(shared_dir, tick_number, strategy, flows, routes, link_metrics, summary)
-    append_history(shared_dir, tick_number, strategy, flows, summary)
+    # FIX: pass link_metrics through so per-link utils are persisted in history.csv
+    append_history(shared_dir, tick_number, strategy, flows, summary, link_metrics)
 
 
 if __name__ == "__main__":
@@ -102,7 +122,7 @@ if __name__ == "__main__":
     graph, config = graph_module.get_graph(graph_module.PATH_TOPOLOGY_CONFIG)
     # Get directory containing log files
     shared_dir    = os.path.join(os.path.dirname(__file__), "../shared")
-    # Get traffic config 
+    # Get traffic config
     traffic_cfg   = config["traffic"]
 
     # Simulate 3 ticks
@@ -116,7 +136,7 @@ if __name__ == "__main__":
         # Generate summary of edge metrics
         summary = compute_network_summary(link_metrics)
 
-        # log edge state and tick data
+        # Log edge state and tick data
         write_all(shared_dir, tick, strategy, flows, routes, link_metrics, summary)
         print(f"Tick {tick} written — strategy={strategy}  congested={summary['congested_links']}/{summary['total_links']}  max_util={summary['max_utilization']*100:.1f}%")
 

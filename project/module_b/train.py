@@ -12,8 +12,8 @@ import yaml
 
 # ─── Paths ────────────────────────────────────────────────────────────────────
 
-MODULE_DIR   = os.path.dirname(os.path.abspath(__file__))
-SHARED_DIR   = os.path.abspath(os.path.join(MODULE_DIR, "../shared"))
+MODULE_DIR    = os.path.dirname(os.path.abspath(__file__))
+SHARED_DIR    = os.path.abspath(os.path.join(MODULE_DIR, "../shared"))
 TOPOLOGY_PATH = os.path.abspath(os.path.join(MODULE_DIR, "../module_a/topology.yaml"))
 HISTORY_PATH  = os.path.join(SHARED_DIR, "history.csv")
 MODEL_PATH    = os.path.join(MODULE_DIR,  "qtable.pkl")
@@ -80,12 +80,13 @@ def discretise_utilization(util: float) -> int:
     """Map a float utilization in [0, 1+] to an integer bucket in [0, UTIL_BINS-1]."""
     return min(int(util * UTIL_BINS), UTIL_BINS - 1)
 
-def build_state_key(link_utils: dict, link_order: list) -> tuple:
-    """
-    Convert the {edge_key: utilization} dict into a hashable tuple of int bins.
-    link_order guarantees the same tuple layout every call.
-    """
-    return tuple(discretise_utilization(link_utils.get(lk, 0.0)) for lk in link_order)
+def build_state_key_from_row(row: dict, link_order: list) -> tuple:
+    bins = []
+    for (a, b) in link_order:
+        col  = f"link_util_{a}<->{b}"
+        util = float(row.get(col, 0.0))
+        bins.append(discretise_utilization(util))
+    return tuple(bins)
 
 # ─── Reward function ──────────────────────────────────────────────────────────
 
@@ -147,25 +148,38 @@ def train(rows: list[dict], qtable: dict, all_paths: dict, link_order: list):
     """
     Offline training pass over history.csv rows.
 
-    Because history.csv does not store per-link utilization (only summary stats),
-    we approximate the state from the aggregate utilization columns.
-    The RL agent refines this online from the richer state.json.
+    Uses the full per-link state vector (one bin per edge). This means the
+    warm-start Q-table shares the exact same state representation as the online
+    agent in rl_agent.py, so all offline learning transfers correctly.
 
     Strategy:
       For each consecutive pair of rows (s_t, s_{t+1}):
-        - Build a proxy state from avg/max utilization bins
-        - Choose action 0 (baseline path) for the state seen in the CSV
-          since we don't know what path Module A actually used per flow
-        - Update Q-values with the observed reward at s_{t+1}
+        - Build the full 14-element state key from per-link utilization columns
+        - Choose action 0 (Dijkstra baseline) for all states seen in CSV,
+          since history.csv doesn't record which path each flow actually took
+        - Update Q-values with the reward observed at s_{t+1}
+
+    Once the online agent starts running it will refine these Q-values using
+    the actual per-flow actions it selects.
     """
     if len(rows) < 2:
         print("Not enough history rows to train (need ≥ 2).")
         return 0
 
-    # Use a single canonical (src, dst) pair to represent aggregate network quality.
-    # This simplified proxy lets the Q-table learn the mapping:
-    #   network_congestion_level → prefer less-loaded paths
-    # The online agent uses the full per-link state instead.
+    # Detect whether the new per-link columns are present
+    sample_row = rows[0]
+    has_link_cols = any(k.startswith("link_util_") for k in sample_row)
+    if not has_link_cols:
+        print(
+            "WARNING: history.csv does not contain per-link utilization columns.\n"
+            "         Delete history.csv and re-run the simulator with the updated\n"
+            "         state_writer.py to generate compatible training data.\n"
+            "         Falling back to 2-element proxy state for this run."
+        )
+
+    # Choose a canonical (src, dst) pair to represent the action space size.
+    # All pairs with the same number of paths share Q-table rows, so we just
+    # need any pair with ≥ 2 paths to initialise correctly.
     PROXY_PAIR = None
     for pair, paths in all_paths.items():
         if len(paths) >= 2:
@@ -184,21 +198,30 @@ def train(rows: list[dict], qtable: dict, all_paths: dict, link_order: list):
         row_t1 = rows[i + 1]
 
         try:
-            avg_util_t  = float(row_t["avg_utilization"])
-            max_util_t  = float(row_t["max_utilization"])
-            avg_util_t1 = float(row_t1["avg_utilization"])
-            max_util_t1 = float(row_t1["max_utilization"])
             avg_delay   = float(row_t1["avg_effective_delay"])
             congested   = int(row_t1["congested_links"])
             total_links = int(row_t1["total_links"])
         except (KeyError, ValueError):
             continue
 
-        # Proxy state: two buckets — avg and max utilization
-        state      = (discretise_utilization(avg_util_t),  discretise_utilization(max_util_t))
-        next_state = (discretise_utilization(avg_util_t1), discretise_utilization(max_util_t1))
+        # Use full per-link state when columns are available,
+        # otherwise fall back to the old 2-element proxy so existing history
+        # files don't cause a hard crash.
+        if has_link_cols:
+            state      = build_state_key_from_row(row_t,  link_order)
+            next_state = build_state_key_from_row(row_t1, link_order)
+        else:
+            try:
+                avg_util_t  = float(row_t["avg_utilization"])
+                max_util_t  = float(row_t["max_utilization"])
+                avg_util_t1 = float(row_t1["avg_utilization"])
+                max_util_t1 = float(row_t1["max_utilization"])
+            except (KeyError, ValueError):
+                continue
+            state      = (discretise_utilization(avg_util_t),  discretise_utilization(max_util_t))
+            next_state = (discretise_utilization(avg_util_t1), discretise_utilization(max_util_t1))
 
-        reward     = compute_reward(avg_util_t1, avg_delay, congested, total_links)
+        reward = compute_reward(0.0, avg_delay, congested, total_links)
 
         # Greedy action selection during offline training
         action = int(np.argmax(q_get(qtable, state, num_actions)))
